@@ -8,16 +8,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 import pe.edu.cibertec.patitas_frontend_wc.dto.LoginRequestDTO;
 import pe.edu.cibertec.patitas_frontend_wc.dto.LoginResponseDTO;
 import pe.edu.cibertec.patitas_frontend_wc.viewmodel.LoginModel;
+import reactor.core.publisher.Mono;
 
 @Controller
 @RequestMapping("/login")
 public class LoginController {
 
     @Autowired
-    RestTemplate restTemplateAutenticacion;
+    WebClient webClientAutenticacion;
 
     @GetMapping("/inicio")
     public String inicio(Model model) {
@@ -44,31 +46,41 @@ public class LoginController {
 
         try {
 
-
-            //Invocar API de validacion de usuario
+            // Invocar API de validación de usuario
             LoginRequestDTO loginRequestDTO = new LoginRequestDTO(tipoDocumento, numeroDocumento, password);
-            LoginResponseDTO loginResponseDTO = restTemplateAutenticacion.postForObject("/login", loginRequestDTO , LoginResponseDTO.class);
 
-            //Validar Respuestaaa
-            if(loginResponseDTO.codigo().equals("00")){
+            Mono<LoginResponseDTO> monoLoginResponseDTO = webClientAutenticacion.post()
+                    .uri("/login")
+                    .body(Mono.just(loginRequestDTO), LoginRequestDTO.class)
+                    .retrieve()
+                    .bodyToMono(LoginResponseDTO.class);
+
+            // recuperar resultado del mono (Sincrono o bloqueante)
+            LoginResponseDTO loginResponseDTO = monoLoginResponseDTO.block();
+
+            // Validar respuesta
+            if (loginResponseDTO.codigo().equals("00")) {
+
                 LoginModel loginModel = new LoginModel("00", "", loginResponseDTO.nombreUsuario());
                 model.addAttribute("loginModel", loginModel);
                 return "principal";
-            }else {
-                LoginModel loginModel = new LoginModel("02", "Error: Autenticacion fallida", "");
+
+            } else {
+
+                LoginModel loginModel = new LoginModel("02", "Error: Autenticación fallida", "");
                 model.addAttribute("loginModel", loginModel);
                 return "inicio";
 
             }
-        }catch (Exception e){
 
-            LoginModel loginModel = new LoginModel("99", "Error: Ocurrio un problema en la autenticacion", "");
+        } catch(Exception e) {
+
+            LoginModel loginModel = new LoginModel("99", "Error: Ocurrió un problema en la autenticación", "");
             model.addAttribute("loginModel", loginModel);
             System.out.println(e.getMessage());
             return "inicio";
+
         }
-
-
 
     }
 
